@@ -1,9 +1,9 @@
 // Service worker: lưu đệm giao diện và thư viện Telegram (phiên bản cố định) để mở nhanh.
 // KHÔNG lưu đệm dữ liệu người dùng: tệp đi qua WebSocket tới Telegram, không qua đây.
-const SHELL = 'telecloud-shell-v1';
+const SHELL = 'telecloud-shell-v2';
 const LIBS = 'telecloud-libs-v1';
 const FILES = ['./', 'index.html', 'styles.css', 'manifest.webmanifest', 'icons/telecloud-192.png', 'icons/telecloud-512.png',
-  'js/app.js', 'js/tg.js', 'js/gram.js', 'js/store.js', 'js/tcfile.js', 'js/kdf.js', 'js/kdf-worker.js', 'js/scrypt.js', 'js/sha256.js'];
+  'js/app.js', 'js/tg.js', 'js/gram.js', 'js/store.js', 'js/tcfile.js', 'js/kdf.js', 'js/kdf-worker.js', 'js/scrypt.js', 'js/sha256.js', 'js/icons.js'];
 
 self.addEventListener('install', (e) => e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', (e) => e.waitUntil(caches.keys()

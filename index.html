@@ -88,7 +88,7 @@
   <header class="top">
     <div class="brand"><img src="icons/telecloud-192.png" alt=""><b>TeleCloud</b></div>
     <span class="sync" id="sync"></span>
-    <button class="secondary small" id="btn-lock" title="Khóa Vault">🔒 <span class="hide-sm">Khóa</span></button>
+    <button class="secondary small top-btn" id="btn-lock" title="Khóa Vault"><span class="hide-sm">Khóa</span></button>
     <div class="menu-wrap">
       <button class="secondary small" id="btn-menu" aria-haspopup="true">⋮</button>
       <div class="menu" id="menu" hidden>
@@ -100,18 +100,22 @@
   </header>
 
   <div class="layout">
-    <aside class="side">
-      <div class="side-head"><b>Thư mục</b><button class="ghost small" id="btn-mkdir" title="Thư mục mới">＋</button></div>
-      <ul id="folders"></ul>
-      <p class="muted small" id="stats"></p>
+    <aside class="side" aria-label="Thư mục">
+      <div class="side-head">
+        <span class="side-title">Thư mục</span>
+        <button class="icon-btn" id="btn-mkdir" title="Thư mục mới" aria-label="Thư mục mới"></button>
+      </div>
+      <ul class="tree" id="folders" role="tree"></ul>
+      <div class="side-foot" id="stats"></div>
     </aside>
     <main class="content" id="content">
       <div class="toolbar">
-        <input id="search" type="search" placeholder="Tìm theo tên tệp…">
-        <button id="btn-upload">＋ Tải lên</button>
+        <div class="crumbs" id="crumbs"></div>
+        <label class="search"><span id="search-ic"></span><input id="search" type="search" placeholder="Tìm trong thư mục này…" aria-label="Tìm tệp"></label>
+        <button id="btn-upload" class="primary-btn"></button>
         <input type="file" id="file-input" multiple hidden>
       </div>
-      <h3 id="title"></h3>
+      <div class="list-head" id="list-head"><span></span><span>Tên</span><span class="c-size">Kích thước</span><span class="c-date">Ngày tải lên</span><span></span></div>
       <ul class="files" id="files"></ul>
       <p class="empty muted" id="empty" hidden>Chưa có tệp nào. Bấm <b>＋ Tải lên</b> hoặc kéo-thả tệp vào đây.</p>
       <div class="drop" id="drop">Thả tệp vào đây để mã hóa và tải lên</div>
@@ -131,6 +135,8 @@
     <menu><button value="cancel" class="secondary" id="dlg-cancel">Hủy</button><button value="ok" id="dlg-ok">OK</button></menu>
   </form>
 </dialog>
+
+<div class="pop" id="pop" hidden></div>
 
 <dialog id="viewer" class="viewer">
   <header><span id="v-title"></span><span><button class="secondary small" id="v-save">Tải xuống</button> <button class="secondary small" id="v-close">✕</button></span></header>

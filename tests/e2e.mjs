@@ -117,12 +117,34 @@ d = await dump();
 assert.equal(d.filter((m) => m.caption.startsWith('TCLOUDIDX1:')).length, 1, 'chỉ giữ 1 chỉ mục');
 ok('Tạo thư mục, chuyển tệp, đổi tên; chỉ mục được lưu lên Telegram (chỉ giữ 1 bản mới nhất)');
 
+// 6b. cây thư mục: kéo-thả tệp vào thư mục, đổi tên thư mục qua menu ⋯, thu gọn/mở rộng
+await page.click('#folders >> text=Tất cả');
+await page.dragAndDrop('.files li:has-text("Hợp đồng thuê nhà.pdf")', '#folders .node.d1:has-text("Ảnh gia đình")');
+await page.waitForFunction(() => window.__tc.S.vault.list().find((e) => e.name === 'Hợp đồng thuê nhà.pdf')?.folder === 'Ảnh gia đình');
+await page.hover('#folders .node.d1:has-text("Ảnh gia đình")');
+await page.click('#folders .node.d1:has-text("Ảnh gia đình") .node-more');
+await page.screenshot({ path: OUT + '2b-menu-thu-muc.png' });
+await page.click('#pop >> text=Đổi tên');
+await page.fill('#dlg input', 'Giấy tờ gia đình'); await page.keyboard.press('Enter');
+await page.waitForSelector('#folders >> text=Giấy tờ gia đình');
+assert.equal(await page.isVisible('#folders >> text=Ảnh gia đình'), false);
+assert.equal(await page.evaluate(() => window.__tc.S.vault.list('Giấy tờ gia đình').length), 2);
+await page.click('#folders .twisty'); await page.waitForSelector('#folders .node.d1', { state: 'detached' });
+await page.click('#folders .twisty'); await page.waitForSelector('#folders .node.d1');
+await page.click('#folders >> text=Giấy tờ gia đình');
+await page.waitForSelector('#crumbs >> text=Giấy tờ gia đình');
+await page.click('#btn-tclear');
+await page.waitForTimeout(400);
+await page.screenshot({ path: OUT + '2c-cay-thu-muc.png' });
+await page.evaluate(() => window.__tc.S.vault.flush());
+ok('Cây thư mục: kéo-thả tệp vào thư mục, đổi tên thư mục qua menu ⋯, thu gọn/mở rộng, đường dẫn (breadcrumb)');
+
 // 7. thiết bị thứ hai (điện thoại) thấy đúng thay đổi
 const phone = await newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 await login(phone);
 await phone.fill('#vault-pw', PW); await phone.click('#f-unlock button');
 await phone.waitForSelector('.files >> text=ghi chú quan trọng.txt');
-await phone.click('#folders >> text=Ảnh gia đình');
+await phone.click('#folders >> text=Giấy tờ gia đình');
 await phone.waitForSelector('.files >> text=ảnh chụp CCCD.jpg');
 await phone.screenshot({ path: OUT + '4-dien-thoai.png' });
 // điện thoại tải lên, máy tính đồng bộ thấy

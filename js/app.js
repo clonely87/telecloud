@@ -3,6 +3,7 @@ import { createTelegram, friendlyError } from './tg.js';
 import { Vault, DEFAULT_FOLDER } from './store.js';
 import { clearKeyCache } from './kdf.js';
 import { loadGram } from './gram.js';
+import { icon, fileBadge } from './icons.js';
 
 const AUTO_LOCK_MIN = 15;
 const $ = (s) => document.querySelector(s);
@@ -28,12 +29,6 @@ function toast(msg, err = false) {
   clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), err ? 6000 : 3000);
 }
 const errMsg = (e) => friendlyError(e);
-function icon(e) {
-  const m = e.mime || '';
-  if (m.startsWith('image/')) return '🖼️'; if (m.startsWith('video/')) return '🎬'; if (m.startsWith('audio/')) return '🎵';
-  if (m === 'application/pdf') return '📕'; if (/zip|rar|7z|tar|gzip/.test(m)) return '🗜️';
-  if (/word|document/.test(m)) return '📘'; if (/sheet|excel|csv/.test(m)) return '📗'; return '📄';
-}
 
 function dialog({ title, body = '', ok = 'OK', cancel = 'Hủy', danger = false, input = null, select = null }) {
   const d = $('#dlg'); $('#dlg-title').textContent = title;
@@ -162,42 +157,129 @@ function lock(msg) {
 
 function setSync(t) { $('#sync').textContent = t; }
 
+// ---------- menu bật lên (⋯) ----------
+function popMenu(anchor, items) {
+  const pop = $('#pop'); pop.replaceChildren();
+  for (const it of items) {
+    const b = el('button', { disabled: !!it.disabled, title: it.hint || '' }, icon(it.icon), el('span', { textContent: it.label }));
+    if (it.danger) b.className = 'danger-item';
+    b.onclick = (e) => { e.stopPropagation(); pop.hidden = true; it.run(); };
+    pop.append(b);
+  }
+  const r = anchor.getBoundingClientRect();
+  pop.hidden = false;
+  pop.style.left = Math.min(innerWidth - pop.offsetWidth - 8, r.left) + 'px';
+  pop.style.top = (r.bottom + 4 + pop.offsetHeight > innerHeight ? r.top - pop.offsetHeight - 4 : r.bottom + 4) + 'px';
+}
+document.addEventListener('click', () => ($('#pop').hidden = true));
+addEventListener('resize', () => ($('#pop').hidden = true));
+
+// ---------- cây thư mục ----------
+const DRAG_TYPE = 'application/x-telecloud-file';
+function dropTarget(node, folder) {
+  node.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes(DRAG_TYPE)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; node.classList.add('drop-on'); } });
+  node.addEventListener('dragleave', () => node.classList.remove('drop-on'));
+  node.addEventListener('drop', (e) => {
+    const id = e.dataTransfer.getData(DRAG_TYPE);
+    node.classList.remove('drop-on');
+    if (!id) return;
+    e.preventDefault(); e.stopPropagation();
+    const f = S.vault.index.files[id];
+    if (f && f.folder !== folder) { S.vault.move(id, folder); toast(`Đã chuyển “${f.name}” vào ${folder}`); }
+  });
+}
+
+async function renameFolder(name) {
+  const n = await dialog({ title: 'Đổi tên thư mục', input: { value: name }, ok: 'Lưu' });
+  if (!n || n === name) return;
+  try { const nn = S.vault.renameFolder(name, n); if (S.folder === name) S.folder = nn; render(); } catch (e) { toast(e.message, true); }
+}
+async function deleteFolder(name) {
+  if (!await dialog({ title: 'Xóa thư mục?', body: `Xóa thư mục “${name}”?`, ok: 'Xóa', danger: true })) return;
+  try { S.vault.deleteFolder(name); if (S.folder === name) S.folder = null; render(); } catch (e) { toast(e.message, true); }
+}
+
+function renderTree(v) {
+  const tree = $('#folders'); tree.replaceChildren();
+  const all = v.list();
+  const collapsed = store.get('tree_collapsed') === true;
+  const row = ({ label, folder, count, ic, depth, root }) => {
+    const on = S.folder === folder;
+    const li = el('li', { className: `node d${depth}${on ? ' on' : ''}${root ? ' root' : ''}`, role: 'treeitem' });
+    li.setAttribute('aria-selected', on ? 'true' : 'false');
+    const btn = el('button', { className: 'node-main', title: label });
+    if (root) {
+      const tw = el('span', { className: 'twisty' + (collapsed ? '' : ' open'), title: collapsed ? 'Mở rộng' : 'Thu gọn' }, icon('chevron'));
+      tw.onclick = (e) => { e.stopPropagation(); store.set('tree_collapsed', !collapsed); render(); };
+      btn.append(tw);
+      li.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
+    btn.append(icon(ic, 'node-ic'), el('span', { className: 'node-name', textContent: label }), el('span', { className: 'count', textContent: count }));
+    btn.onclick = () => { S.folder = folder; render(); };
+    li.append(btn);
+    if (!root) {
+      dropTarget(li, folder);
+      const isDefault = folder === DEFAULT_FOLDER;
+      const more = el('button', { className: 'node-more', title: 'Tùy chọn thư mục', ariaLabel: 'Tùy chọn thư mục' }, icon('more'));
+      more.onclick = (e) => {
+        e.stopPropagation();
+        popMenu(more, [
+          { icon: 'upload', label: 'Tải tệp lên đây', run: () => { S.folder = folder; render(); $('#file-input').click(); } },
+          { icon: 'edit', label: 'Đổi tên', disabled: isDefault, hint: isDefault ? 'Thư mục mặc định' : '', run: () => renameFolder(folder) },
+          { icon: 'trash', label: 'Xóa thư mục', danger: true, disabled: isDefault || count > 0,
+            hint: isDefault ? 'Thư mục mặc định' : count > 0 ? 'Chỉ xóa được thư mục trống' : '', run: () => deleteFolder(folder) },
+        ]);
+      };
+      li.append(more);
+    }
+    return li;
+  };
+  tree.append(row({ label: 'Tất cả tệp', folder: null, count: all.length, ic: 'vault', depth: 0, root: true }));
+  if (!collapsed) {
+    const kids = el('ul', { className: 'children', role: 'group' });
+    const folders = v.folders().sort((a, b) => (b.name === DEFAULT_FOLDER) - (a.name === DEFAULT_FOLDER) || a.name.localeCompare(b.name, 'vi'));
+    for (const f of folders) kids.append(row({ label: f.name, folder: f.name, count: f.count, ic: S.folder === f.name ? 'folderOpen' : 'folder', depth: 1 }));
+    tree.append(el('li', { className: 'group-wrap', role: 'none' }, kids));
+  }
+  const st = v.stats();
+  $('#stats').replaceChildren(icon('database'),
+    el('div', {}, el('b', { textContent: `${st.count} tệp · ${fmtSize(st.bytes)}` }), el('small', { textContent: 'Lưu trên Telegram, mã hóa đầu-cuối' })));
+}
+
 function render() {
   const v = S.vault; if (!v) return;
-  const fl = $('#folders'); fl.replaceChildren();
-  const all = v.list();
-  const mk = (name, label, count) => {
-    const a = el('a', { className: S.folder === name ? 'on' : '' }, label, el('span', { textContent: count }));
-    a.onclick = () => { S.folder = name; render(); };
-    const li = el('li', {}, a);
-    if (name && name !== DEFAULT_FOLDER) {
-      const del = el('button', { className: 'ghost small', textContent: '✕', title: 'Xóa thư mục' });
-      del.onclick = async () => {
-        if (!await dialog({ title: 'Xóa thư mục?', body: `Xóa thư mục “${name}”? (chỉ xóa được khi thư mục trống)`, ok: 'Xóa', danger: true })) return;
-        try { v.deleteFolder(name); if (S.folder === name) S.folder = null; } catch (e) { toast(e.message, true); }
-      };
-      li.append(del);
-    }
-    fl.append(li);
-  };
-  mk(null, 'Tất cả', all.length);
-  for (const f of v.folders()) mk(f.name, f.name, f.count);
-  const st = v.stats();
-  $('#stats').textContent = `${st.count} tệp · ${fmtSize(st.bytes)}`;
-  setSync(v.pending ? 'Đang lưu chỉ mục…' : (S.userName ? `☁ ${S.userName}` : '☁ Đã đồng bộ'));
+  renderTree(v);
+  setSync(v.pending ? 'Đang lưu chỉ mục…' : (S.userName || 'Đã đồng bộ'));
 
-  $('#title').textContent = S.folder || 'Tất cả tệp';
+  const cr = $('#crumbs'); cr.replaceChildren();
+  const home = el('button', { className: 'crumb' + (S.folder ? '' : ' cur'), textContent: 'Tất cả tệp' });
+  home.onclick = () => { S.folder = null; render(); };
+  cr.append(home);
+  if (S.folder) cr.append(icon('chevron', 'sep'), el('span', { className: 'crumb cur', textContent: S.folder }));
+
   const items = v.list(S.folder, S.q);
   const ul = $('#files'); ul.replaceChildren();
   $('#empty').hidden = items.length > 0;
+  $('#list-head').hidden = items.length === 0;
   for (const e of items) {
     const nm = el('div', { className: 'nm' }, el('b', { textContent: e.name }),
       el('small', { textContent: `${fmtSize(e.size)} · ${fmtDate(e.at)}${S.folder ? '' : ' · ' + e.folder}` }));
     nm.onclick = () => open(e);
     const ops = el('div', { className: 'ops' });
-    const op = (t, title, fn) => { const b = el('button', { textContent: t, title }); b.onclick = (ev) => { ev.stopPropagation(); fn(e); }; ops.append(b); };
-    op('⬇', 'Tải xuống', download); op('📁', 'Chuyển thư mục', move); op('✎', 'Đổi tên', rename); op('🗑', 'Xóa', remove);
-    ul.append(el('li', {}, el('div', { className: 'ic', textContent: icon(e) }), nm, ops));
+    const op = (ic, title, fn) => { const b = el('button', { title, ariaLabel: title }, icon(ic)); b.onclick = (ev) => { ev.stopPropagation(); fn(e); }; ops.append(b); };
+    op('download', 'Tải xuống', download); op('move', 'Chuyển thư mục', move); op('edit', 'Đổi tên', rename); op('trash', 'Xóa', remove);
+    const more = el('button', { title: 'Thêm', ariaLabel: 'Thêm', className: 'only-sm' }, icon('more'));
+    more.onclick = (ev) => { ev.stopPropagation(); popMenu(more, [
+      { icon: 'move', label: 'Chuyển thư mục', run: () => move(e) },
+      { icon: 'edit', label: 'Đổi tên', run: () => rename(e) },
+      { icon: 'trash', label: 'Xóa', danger: true, run: () => remove(e) }]); };
+    ops.append(more);
+    const li = el('li', { draggable: true }, fileBadge(e), nm,
+      el('span', { className: 'c-size', textContent: fmtSize(e.size) }),
+      el('span', { className: 'c-date', textContent: fmtDate(e.at) }), ops);
+    li.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData(DRAG_TYPE, e.id); ev.dataTransfer.effectAllowed = 'move'; li.classList.add('dragging'); document.body.classList.add('dragging-file'); });
+    li.addEventListener('dragend', () => { li.classList.remove('dragging'); document.body.classList.remove('dragging-file'); });
+    ul.append(li);
   }
 }
 
@@ -304,9 +386,9 @@ function uploadFiles(files) {
 $('#btn-upload').onclick = () => $('#file-input').click();
 $('#file-input').onchange = (e) => { uploadFiles([...e.target.files]); e.target.value = ''; };
 const box = $('#content');
-box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drag'); });
+box.addEventListener('dragover', (e) => { if (!e.dataTransfer.types.includes('Files')) return; e.preventDefault(); box.classList.add('drag'); });
 box.addEventListener('dragleave', (e) => { if (!box.contains(e.relatedTarget)) box.classList.remove('drag'); });
-box.addEventListener('drop', (e) => { e.preventDefault(); box.classList.remove('drag'); uploadFiles([...e.dataTransfer.files].filter((f) => f.size)); });
+box.addEventListener('drop', (e) => { if (!e.dataTransfer.types.includes('Files')) return; e.preventDefault(); box.classList.remove('drag'); uploadFiles([...e.dataTransfer.files].filter((f) => f.size)); });
 
 async function download(e) {
   if (window.showSaveFilePicker) {
@@ -351,5 +433,9 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && S.v
 addEventListener('beforeunload', (e) => { if (running || S.vault?.pending) { S.vault?.flush().catch(() => {}); e.preventDefault(); e.returnValue = ''; } });
 
 if ('serviceWorker' in navigator && isSecureContext && !location.search.includes('nosw')) navigator.serviceWorker.register('sw.js').catch(() => {});
+$('#btn-mkdir').append(icon('plus'));
+$('#btn-lock').prepend(icon('lock'));
+$('#search-ic').replaceWith(icon('search', 'search-ic'));
+$('#btn-upload').append(icon('upload'), el('span', { textContent: 'Tải lên' }));
 window.__tc = { S };
 boot();

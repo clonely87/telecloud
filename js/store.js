@@ -221,6 +221,20 @@ export class Vault {
     if (this.index.folders.some((f) => f.toLocaleLowerCase('vi') === name.toLocaleLowerCase('vi'))) throw new Error('Thư mục đã tồn tại.');
     this.#addFolder(name); this.#scheduleSave(); this.onChange(); return name;
   }
+  renameFolder(oldName, newName) {
+    if (oldName === DEFAULT_FOLDER) throw new Error('Không thể đổi tên thư mục mặc định.');
+    newName = cleanFolder(newName);
+    if (newName === oldName) return oldName;
+    if (this.index.folders.some((f) => f !== oldName && f.toLocaleLowerCase('vi') === newName.toLocaleLowerCase('vi'))) throw new Error('Đã có thư mục trùng tên.');
+    this.index.folders = this.index.folders.map((f) => (f === oldName ? newName : f));
+    this.dirtyFolders.del.add(oldName); this.dirtyFolders.add.add(newName); this.dirtyFolders.del.delete(newName);
+    for (const [id, e] of Object.entries(this.index.files)) {
+      if (e.folder === oldName) { const n = { ...e, folder: newName }; this.index.files[id] = n; this.dirty.set(id, { ...n }); }
+    }
+    this.#scheduleSave(); this.onChange();
+    return newName;
+  }
+
   deleteFolder(name) {
     if (name === DEFAULT_FOLDER) throw new Error('Không thể xóa thư mục mặc định.');
     if (Object.values(this.index.files).some((e) => e.folder === name)) throw new Error('Thư mục vẫn còn tệp. Hãy chuyển hoặc xóa tệp trước.');
