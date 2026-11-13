@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' https://esm.sh https://cdn.jsdelivr.net; connect-src 'self' https://esm.sh https://cdn.jsdelivr.net wss://*.web.telegram.org https://*.web.telegram.org; worker-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self'; frame-src blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0b1020">
+<title>TeleCloud</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/telecloud-192.png">
+<link rel="apple-touch-icon" href="icons/telecloud-192.png">
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+
+<main id="gate" class="gate">
+  <div class="card">
+    <div class="brand-big"><img src="icons/telecloud-192.png" alt=""><div><b>TeleCloud</b><small>Kho mã hóa trên Telegram · không cần máy chủ</small></div></div>
+
+    <section data-step="boot"><div class="spinner"></div><p class="muted" id="boot-text">Đang khởi động…</p></section>
+
+    <section data-step="api" hidden>
+      <h2>Kết nối Telegram</h2>
+      <p class="muted small">Dùng đúng <b>API ID</b> và <b>API Hash</b> trong file <code>.env</code> của TeleCloud trên máy tính (hoặc lấy tại <a href="https://my.telegram.org/apps" target="_blank" rel="noopener">my.telegram.org</a>). Chúng chỉ được lưu trên thiết bị này.</p>
+      <form id="f-api">
+        <label>API ID <input id="api-id" inputmode="numeric" autocomplete="off" required pattern="[0-9]+"></label>
+        <label>API Hash <input id="api-hash" autocomplete="off" required minlength="32" maxlength="32"></label>
+        <button type="submit">Tiếp tục</button>
+      </form>
+    </section>
+
+    <section data-step="phone" hidden>
+      <h2>Đăng nhập Telegram</h2>
+      <form id="f-phone">
+        <label>Số điện thoại (kèm mã quốc gia) <input id="phone" type="tel" placeholder="+84 912 345 678" autocomplete="tel" required></label>
+        <button type="submit">Gửi mã xác minh</button>
+      </form>
+    </section>
+
+    <section data-step="code" hidden>
+      <h2>Nhập mã xác minh</h2>
+      <p class="muted small" id="code-hint">Telegram đã gửi mã vào ứng dụng Telegram trên thiết bị khác của bạn.</p>
+      <form id="f-code">
+        <label>Mã xác minh <input id="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+        <button type="submit">Đăng nhập</button>
+      </form>
+    </section>
+
+    <section data-step="2fa" hidden>
+      <h2>Xác minh 2 bước</h2>
+      <form id="f-2fa">
+        <label>Mật khẩu Telegram (2FA) <input id="tg-pw" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Xác nhận</button>
+      </form>
+    </section>
+
+    <section data-step="unlock" hidden>
+      <h2>Mở khóa Vault</h2>
+      <p class="muted small" id="who"></p>
+      <form id="f-unlock">
+        <label>Mật khẩu Vault <input id="vault-pw" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Mở khóa</button>
+      </form>
+    </section>
+
+    <section data-step="create" hidden>
+      <h2>Tạo Vault mới</h2>
+      <p class="muted small">Chưa có dữ liệu TeleCloud nào trong Saved Messages của tài khoản này. Nếu bạn đã dùng TeleCloud trên máy tính, hãy quay lại và nhập <b>đúng mật khẩu Vault cũ</b>.</p>
+      <form id="f-create">
+        <label>Mật khẩu Vault <input id="cr-pw" type="password" autocomplete="new-password" minlength="10" required></label>
+        <label>Nhập lại <input id="cr-pw2" type="password" autocomplete="new-password" required></label>
+        <p class="note">Quên mật khẩu Vault = mất dữ liệu. Không ai khôi phục được, kể cả Telegram.</p>
+        <button type="submit">Tạo Vault</button>
+        <button type="button" class="secondary" id="btn-back-unlock">Quay lại</button>
+      </form>
+    </section>
+
+    <section data-step="busy" hidden><div class="spinner"></div><p class="muted" id="busy-text">Đang xử lý…</p></section>
+
+    <p class="error" id="gate-error" hidden></p>
+    <p class="links"><button class="ghost small" id="btn-reset" hidden>Đổi tài khoản / API</button></p>
+  </div>
+</main>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand"><img src="icons/telecloud-192.png" alt=""><b>TeleCloud</b></div>
+    <span class="sync" id="sync"></span>
+    <button class="secondary small" id="btn-lock" title="Khóa Vault">🔒 <span class="hide-sm">Khóa</span></button>
+    <div class="menu-wrap">
+      <button class="secondary small" id="btn-menu" aria-haspopup="true">⋮</button>
+      <div class="menu" id="menu" hidden>
+        <button data-act="refresh">Đồng bộ lại với Telegram</button>
+        <button data-act="logout">Đăng xuất Telegram trên thiết bị này</button>
+        <button data-act="about">Giới thiệu & bảo mật</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <div class="side-head"><b>Thư mục</b><button class="ghost small" id="btn-mkdir" title="Thư mục mới">＋</button></div>
+      <ul id="folders"></ul>
+      <p class="muted small" id="stats"></p>
+    </aside>
+    <main class="content" id="content">
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Tìm theo tên tệp…">
+        <button id="btn-upload">＋ Tải lên</button>
+        <input type="file" id="file-input" multiple hidden>
+      </div>
+      <h3 id="title"></h3>
+      <ul class="files" id="files"></ul>
+      <p class="empty muted" id="empty" hidden>Chưa có tệp nào. Bấm <b>＋ Tải lên</b> hoặc kéo-thả tệp vào đây.</p>
+      <div class="drop" id="drop">Thả tệp vào đây để mã hóa và tải lên</div>
+    </main>
+  </div>
+
+  <aside class="transfers" id="transfers" hidden>
+    <header><b>Truyền tải</b><button class="ghost small" id="btn-tclear">Ẩn</button></header>
+    <ul id="tlist"></ul>
+  </aside>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog">
+    <h3 id="dlg-title"></h3>
+    <div id="dlg-body"></div>
+    <menu><button value="cancel" class="secondary" id="dlg-cancel">Hủy</button><button value="ok" id="dlg-ok">OK</button></menu>
+  </form>
+</dialog>
+
+<dialog id="viewer" class="viewer">
+  <header><span id="v-title"></span><span><button class="secondary small" id="v-save">Tải xuống</button> <button class="secondary small" id="v-close">✕</button></span></header>
+  <div id="v-body"></div>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+</body>
+</html>
